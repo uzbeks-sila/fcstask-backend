@@ -3,3 +3,14 @@
 
 package api
 
+import (
+	"fcstask-backend/internal/server"
+
+	handler "fcstask-backend/internal/server/handler"
+
+	"github.com/labstack/echo/v4"
+)
+
+func RegisterHandlers(e *echo.Echo, apiServer *server.Server) {
+	e.GET("/api/courses", handler.GetCoursesHandler)
+}

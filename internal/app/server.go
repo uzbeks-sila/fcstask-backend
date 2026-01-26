@@ -3,11 +3,12 @@ package app
 import (
 	"context"
 	"fmt"
-	"github.com/labstack/echo/v4"
 	"time"
 
-	"fcstask/internal/api"
-	"fcstask/internal/server"
+	"github.com/labstack/echo/v4"
+
+	"fcstask-backend/internal/api"
+	"fcstask-backend/internal/server"
 )
 
 type App struct {

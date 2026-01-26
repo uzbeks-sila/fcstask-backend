@@ -1,10 +1,9 @@
 package config
 
 import (
-	"os"
+	//"os"
 	"time"
-
-	"gopkg.in/yaml.v3"
+	//"gopkg.in/yaml.v3"
 )
 
 type Config struct {
@@ -18,15 +17,22 @@ type ServerConfig struct {
 }
 
 func Load(path string) (*Config, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
+	/*
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil, err
+		}
 
-	var cfg Config
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return nil, err
-	}
-
-	return &cfg, nil
+		var cfg Config
+		if err := yaml.Unmarshal(data, &cfg); err != nil {
+			return nil, err
+		}
+	*/
+	return &Config{
+		Server: ServerConfig{
+			Host:            "localhost",
+			Port:            8080,
+			ShutdownTimeout: 5 * time.Second,
+		},
+	}, nil
 }
