@@ -207,3 +207,4 @@ Body same as POST `/api/courses`.
 ### GET `/api/signup/status`
 
 Опциональный эндпоинт для страницы завершения, если нужен.
+
