@@ -38,7 +38,7 @@ func resetDB() {
 		"algorithms": {
 			ID:           "algorithms",
 			Name:         "Algorithms",
-			Status:       CourseStatusCreated,
+			Status:       "created",
 			StartDate:    "2024-01-01",
 			EndDate:      "2024-02-01",
 			RepoTemplate: "git@test/repo.git",
@@ -48,7 +48,7 @@ func resetDB() {
 		"hidden": {
 			ID:           "hidden",
 			Name:         "Hidden",
-			Status:       CourseStatusHidden,
+			Status:       "hidden",
 			StartDate:    "2024-01-01",
 			EndDate:      "2024-02-01",
 			RepoTemplate: "git@test/repo.git",
@@ -66,13 +66,6 @@ func TestValidators(t *testing.T) {
 	}{
 		{"valid status", func() bool { return isValidCourseStatus("created") }, true},
 		{"invalid status", func() bool { return isValidCourseStatus("broken") }, false},
-
-		{"valid slug", func() bool { return isValidSlug("go-course") }, true},
-		{"invalid slug uppercase", func() bool { return isValidSlug("Go-Course") }, false},
-		{"invalid slug underscore", func() bool { return isValidSlug("go_course") }, false},
-		{"invalid slug leading dash", func() bool { return isValidSlug("-go") }, false},
-		{"invalid slug trailing dash", func() bool { return isValidSlug("go-") }, false},
-		{"invalid slug double dash", func() bool { return isValidSlug("go--course") }, false},
 
 		{"valid date", func() bool { return isValidDate("2024-01-01") }, true},
 		{"invalid date format", func() bool { return isValidDate("01-01-2024") }, false},
@@ -332,35 +325,6 @@ func TestCreateCourse_MissingRequiredFields(t *testing.T) {
 	}
 }
 
-func TestCreateCourse_InvalidSlugs(t *testing.T) {
-	resetDB()
-	e := setupEcho()
-
-	badSlugs := []string{
-		"Ab",
-		"go_course",
-		"go course",
-		"го-курс",
-		"--a",
-		"a--",
-		"a-b-c-d-e-f-g-h-i-j-k-l-m-n-o-p-q-r-s-t-u-v-w-x-y-z-0-1-2-3-4-5-6-7-8-9-0",
-		"ab",
-	}
-
-	for _, slug := range badSlugs {
-		t.Run(slug, func(t *testing.T) {
-			body := fmt.Sprintf(`{"name":"Test","slug":"%s","status":"created","startDate":"2025-01-01","endDate":"2025-02-01","repoTemplate":"git@a","description":"x"}`, slug)
-			req := plainReq(http.MethodPost, "/api/courses", []byte(body))
-			rec := httptest.NewRecorder()
-			e.ServeHTTP(rec, req)
-
-			if rec.Code != http.StatusBadRequest {
-				t.Fatalf("expected 400, got %d", rec.Code)
-			}
-		})
-	}
-}
-
 func TestCreateCourse_InvalidDates(t *testing.T) {
 	resetDB()
 	e := setupEcho()
@@ -386,25 +350,6 @@ func TestCreateCourse_InvalidDates(t *testing.T) {
 				t.Fatalf("expected 400, got %d", rec.Code)
 			}
 		})
-	}
-}
-
-func TestCreateCourse_LongDescription(t *testing.T) {
-	resetDB()
-	e := setupEcho()
-
-	longDesc := make([]byte, MaxDescLength+1)
-	for i := range longDesc {
-		longDesc[i] = 'a'
-	}
-
-	body := fmt.Sprintf(`{"name":"Test","slug":"test","status":"created","startDate":"2025-01-01","endDate":"2025-02-01","repoTemplate":"git@a","description":"%s"}`, string(longDesc))
-	req := plainReq(http.MethodPost, "/api/courses", []byte(body))
-	rec := httptest.NewRecorder()
-	e.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", rec.Code)
 	}
 }
 
@@ -657,50 +602,6 @@ func TestUpdateCourse_InvalidDateFormat(t *testing.T) {
 	}
 }
 
-func TestUpdateCourse_LongDescription(t *testing.T) {
-	resetDB()
-	e := setupEcho()
-
-	longDesc := make([]byte, MaxDescLength+1)
-	for i := range longDesc {
-		longDesc[i] = 'a'
-	}
-
-	body := fmt.Sprintf(`{"description":"%s"}`, string(longDesc))
-	req := plainReq(http.MethodPut, "/api/courses/algorithms", []byte(body))
-	rec := httptest.NewRecorder()
-	e.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", rec.Code)
-	}
-}
-
-func TestUpdateCourse_InvalidNameLength(t *testing.T) {
-	resetDB()
-	e := setupEcho()
-
-	cases := []string{
-		`{"name": "ab"}`,
-	}
-
-	longName := make([]byte, MaxNameLength+1)
-	for i := range longName {
-		longName[i] = 'a'
-	}
-	cases = append(cases, fmt.Sprintf(`{"name": "%s"}`, string(longName)))
-
-	for _, bodyStr := range cases {
-		req := plainReq(http.MethodPut, "/api/courses/algorithms", []byte(bodyStr))
-		rec := httptest.NewRecorder()
-		e.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusBadRequest {
-			t.Fatalf("expected 400, got %d", rec.Code)
-		}
-	}
-}
-
 func TestUpdateCourse_IgnoreSlugChange(t *testing.T) {
 	resetDB()
 	e := setupEcho()
@@ -735,55 +636,6 @@ func TestUpdateCourse_InvalidJSON(t *testing.T) {
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", rec.Code)
-	}
-}
-
-func TestCreateCourse_DoubleHyphenInSlug(t *testing.T) {
-	resetDB()
-	e := setupEcho()
-
-	body := []byte(`{"name":"Test","slug":"go--course","status":"created","startDate":"2025-01-01","endDate":"2025-02-01","repoTemplate":"git@test","description":"x"}`)
-	req := plainReq(http.MethodPost, "/api/courses", body)
-	rec := httptest.NewRecorder()
-	e.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("expected 400 for double hyphen, got %d", rec.Code)
-	}
-}
-
-func TestCreateCourse_LeadingTrailingHyphen(t *testing.T) {
-	resetDB()
-	e := setupEcho()
-
-	cases := []string{"-start", "end-", "-"}
-	for _, slug := range cases {
-		t.Run(slug, func(t *testing.T) {
-			body := fmt.Sprintf(`{"name":"Test","slug":"%s","status":"created","startDate":"2025-01-01","endDate":"2025-02-01","repoTemplate":"git@test","description":"x"}`, slug)
-			req := plainReq(http.MethodPost, "/api/courses", []byte(body))
-			rec := httptest.NewRecorder()
-			e.ServeHTTP(rec, req)
-			if rec.Code != http.StatusBadRequest {
-				t.Errorf("expected 400 for %q, got %d", slug, rec.Code)
-			}
-		})
-	}
-}
-
-func TestPostCourseRequest_Validate_AllErrors(t *testing.T) {
-	req := PostCourseRequest{
-		Name:         "ab",
-		Slug:         "BAD_slug",
-		Status:       "wrong",
-		StartDate:    "bad-date",
-		EndDate:      "also-bad",
-		RepoTemplate: "",
-		Description:  string(make([]byte, MaxDescLength+1)),
-	}
-
-	errs := req.Validate()
-	if len(errs) < 6 {
-		t.Fatalf("expected many validation errors, got %d", len(errs))
 	}
 }
 

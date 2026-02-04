@@ -2,43 +2,22 @@ package handler
 
 import (
 	"net/http"
-	"regexp"
 	"sync"
 	"time"
 
 	"github.com/labstack/echo/v4"
 )
 
-const (
-	MinSlugLength  = 3
-	MaxSlugLength  = 50
-	MinNameLength  = 3
-	MaxNameLength  = 100
-	MaxDescLength  = 500
-)
-
-// CourseStatus - статус курса
-type CourseStatus string
-
-const (
-	CourseStatusCreated        CourseStatus = "created"
-	CourseStatusHidden         CourseStatus = "hidden"
-	CourseStatusInProgress     CourseStatus = "in_progress"
-	CourseStatusAllTasksIssued CourseStatus = "all_tasks_issued"
-	CourseStatusDoreshka       CourseStatus = "doreshka"
-	CourseStatusFinished       CourseStatus = "finished"
-)
-
 // Course - модель курса
 type Course struct {
-	ID           string       `json:"id"`
-	Name         string       `json:"name"`
-	Status       CourseStatus `json:"status"`
-	StartDate    string       `json:"startDate"`
-	EndDate      string       `json:"endDate"`
-	RepoTemplate string       `json:"repoTemplate"`
-	Description  string       `json:"description"`
-	URL          string       `json:"url"`
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	Status       string `json:"status"` // Просто string, без кастомного типа
+	StartDate    string `json:"startDate"`
+	EndDate      string `json:"endDate"`
+	RepoTemplate string `json:"repoTemplate"`
+	Description  string `json:"description"`
+	URL          string `json:"url"`
 }
 
 // PostCourseRequest - тело запроса на создание курса
@@ -64,7 +43,7 @@ var (
 		"algorithms": {
 			ID:           "algorithms",
 			Name:         "Algorithms 101",
-			Status:       CourseStatusInProgress,
+			Status:       "in_progress",
 			StartDate:    "2024-10-01",
 			EndDate:      "2024-12-20",
 			RepoTemplate: "git@gitlab.local/algorithms-template.git",
@@ -74,7 +53,7 @@ var (
 		"mlops": {
 			ID:           "mlops",
 			Name:         "MLOps Studio",
-			Status:       CourseStatusAllTasksIssued,
+			Status:       "all_tasks_issued",
 			StartDate:    "2024-09-01",
 			EndDate:      "2024-11-30",
 			RepoTemplate: "git@gitlab.local/mlops-template.git",
@@ -84,7 +63,7 @@ var (
 		"rust": {
 			ID:           "rust",
 			Name:         "Rust Core",
-			Status:       CourseStatusCreated,
+			Status:       "created",
 			StartDate:    "2024-10-15",
 			EndDate:      "2025-01-15",
 			RepoTemplate: "git@gitlab.local/rust-template.git",
@@ -94,7 +73,7 @@ var (
 		"golang": {
 			ID:           "golang",
 			Name:         "Go Lab",
-			Status:       CourseStatusFinished,
+			Status:       "finished",
 			StartDate:    "2024-08-01",
 			EndDate:      "2024-10-31",
 			RepoTemplate: "git@gitlab.local/golang-template.git",
@@ -104,7 +83,7 @@ var (
 		"advanced-cpp": {
 			ID:           "advanced-cpp",
 			Name:         "Advanced C++",
-			Status:       CourseStatusInProgress,
+			Status:       "in_progress",
 			StartDate:    "2024-10-01",
 			EndDate:      "2024-12-20",
 			RepoTemplate: "git@gitlab.local/advanced-cpp-template.git",
@@ -114,7 +93,7 @@ var (
 		"advanced-python": {
 			ID:           "advanced-python",
 			Name:         "Advanced Python",
-			Status:       CourseStatusCreated,
+			Status:       "created",
 			StartDate:    "2024-11-01",
 			EndDate:      "2025-02-28",
 			RepoTemplate: "git@gitlab.local/advanced-python-template.git",
@@ -130,12 +109,12 @@ var (
 
 func isValidCourseStatus(status string) bool {
 	valid := map[string]bool{
-		string(CourseStatusCreated):        true,
-		string(CourseStatusHidden):         true,
-		string(CourseStatusInProgress):     true,
-		string(CourseStatusAllTasksIssued): true,
-		string(CourseStatusDoreshka):       true,
-		string(CourseStatusFinished):       true,
+		"created":          true,
+		"hidden":           true,
+		"in_progress":      true,
+		"all_tasks_issued": true,
+		"doreshka":         true,
+		"finished":         true,
 	}
 	return valid[status]
 }
@@ -143,17 +122,6 @@ func isValidCourseStatus(status string) bool {
 func isValidDate(date string) bool {
 	_, err := time.Parse("2006-01-02", date)
 	return err == nil
-}
-
-func isValidSlug(slug string) bool {
-	if len(slug) < MinSlugLength || len(slug) > MaxSlugLength {
-		return false
-	}
-	if slug == "" || slug[0] == '-' || slug[len(slug)-1] == '-' {
-		return false
-	}
-	match, _ := regexp.MatchString(`^[a-z0-9]+(-[a-z0-9]+)*$`, slug)
-	return match
 }
 
 func isValidDateRange(start, end string) bool {
@@ -168,14 +136,10 @@ func (req *PostCourseRequest) Validate() []ValidationError {
 
 	if req.Name == "" {
 		errs = append(errs, ValidationError{"name", "name is required"})
-	} else if len(req.Name) < MinNameLength || len(req.Name) > MaxNameLength {
-		errs = append(errs, ValidationError{"name", "name must be between 3 and 100 characters"})
 	}
 
 	if req.Slug == "" {
 		errs = append(errs, ValidationError{"slug", "slug is required"})
-	} else if !isValidSlug(req.Slug) {
-		errs = append(errs, ValidationError{"slug", "slug must contain only lowercase letters, numbers and hyphens (3-50 chars)"})
 	}
 
 	if req.Status == "" {
@@ -206,8 +170,6 @@ func (req *PostCourseRequest) Validate() []ValidationError {
 
 	if req.Description == "" {
 		errs = append(errs, ValidationError{"description", "description is required"})
-	} else if len(req.Description) > MaxDescLength {
-		errs = append(errs, ValidationError{"description", "description must not exceed 500 characters"})
 	}
 
 	return errs
@@ -223,7 +185,7 @@ func GetCoursesHandler(c echo.Context) error {
 
 	courses := make([]Course, 0, len(courseDB))
 	for _, course := range courseDB {
-		if statusFilter == "" || string(course.Status) == statusFilter {
+		if statusFilter == "" || course.Status == statusFilter {
 			courses = append(courses, course)
 		}
 	}
@@ -266,7 +228,7 @@ func CreateCourseHandler(c echo.Context) error {
 	course := Course{
 		ID:           req.Slug,
 		Name:         req.Name,
-		Status:       CourseStatus(req.Status),
+		Status:       req.Status,
 		StartDate:    req.StartDate,
 		EndDate:      req.EndDate,
 		RepoTemplate: req.RepoTemplate,
@@ -297,21 +259,16 @@ func UpdateCourseHandler(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid JSON payload"})
 	}
 
-	// Валидация только непустых полей
-	if req.Name != "" && (len(req.Name) < MinNameLength || len(req.Name) > MaxNameLength) {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "name must be between 3 and 100 characters"})
-	}
 	if req.Status != "" && !isValidCourseStatus(req.Status) {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid status value"})
 	}
+
 	if req.StartDate != "" && !isValidDate(req.StartDate) {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "startDate must be in format YYYY-MM-DD"})
 	}
+
 	if req.EndDate != "" && !isValidDate(req.EndDate) {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "endDate must be in format YYYY-MM-DD"})
-	}
-	if req.Description != "" && len(req.Description) > MaxDescLength {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "description must not exceed 500 characters"})
 	}
 
 	updated := course
@@ -319,7 +276,7 @@ func UpdateCourseHandler(c echo.Context) error {
 		updated.Name = req.Name
 	}
 	if req.Status != "" {
-		updated.Status = CourseStatus(req.Status)
+		updated.Status = req.Status
 	}
 	if req.StartDate != "" {
 		updated.StartDate = req.StartDate
