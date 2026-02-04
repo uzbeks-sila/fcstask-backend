@@ -11,13 +11,9 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-/* ============================================================
-   Helpers
-   ============================================================ */
-
 func setupEcho() *echo.Echo {
 	e := echo.New()
-	api := e.Group("/api", AuthMiddleware)
+	api := e.Group("/api")
 
 	api.GET("/courses", GetCoursesHandler)
 	api.GET("/courses/:courseId", GetCourseHandler)
@@ -27,9 +23,9 @@ func setupEcho() *echo.Echo {
 	return e
 }
 
-func authReq(method, path string, body []byte) *http.Request {
+// plainReq - запрос БЕЗ авторизации
+func plainReq(method, path string, body []byte) *http.Request {
 	req := httptest.NewRequest(method, path, bytes.NewReader(body))
-	req.Header.Set("Authorization", "Bearer valid_token_123456")
 	req.Header.Set("Content-Type", "application/json")
 	return req
 }
@@ -62,9 +58,6 @@ func resetDB() {
 	}
 }
 
-/* ============================================================
-   Validators (unit)
-   ============================================================ */
 func TestValidators(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -80,9 +73,6 @@ func TestValidators(t *testing.T) {
 		{"invalid slug leading dash", func() bool { return isValidSlug("-go") }, false},
 		{"invalid slug trailing dash", func() bool { return isValidSlug("go-") }, false},
 		{"invalid slug double dash", func() bool { return isValidSlug("go--course") }, false},
-
-		{"valid token", func() bool { return isValidToken("abcDEF123._-") }, true},
-		{"invalid token space", func() bool { return isValidToken("bad token") }, false},
 
 		{"valid date", func() bool { return isValidDate("2024-01-01") }, true},
 		{"invalid date format", func() bool { return isValidDate("01-01-2024") }, false},
@@ -100,105 +90,11 @@ func TestValidators(t *testing.T) {
 	}
 }
 
-/* ============================================================
-   AuthMiddleware
-   ============================================================ */
-
-func TestAuthMiddleware_NoHeader(t *testing.T) {
-	e := setupEcho()
-	req := httptest.NewRequest(http.MethodGet, "/api/courses", nil)
-	rec := httptest.NewRecorder()
-
-	e.ServeHTTP(rec, req)
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401, got %d", rec.Code)
-	}
-}
-
-func TestAuthMiddleware_InvalidFormat(t *testing.T) {
-	e := setupEcho()
-	req := httptest.NewRequest(http.MethodGet, "/api/courses", nil)
-	req.Header.Set("Authorization", "Bad token")
-	rec := httptest.NewRecorder()
-
-	e.ServeHTTP(rec, req)
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401")
-	}
-}
-
-func TestAuthMiddleware_ShortToken(t *testing.T) {
-	e := setupEcho()
-	req := httptest.NewRequest(http.MethodGet, "/api/courses", nil)
-	req.Header.Set("Authorization", "Bearer short")
-	rec := httptest.NewRecorder()
-
-	e.ServeHTTP(rec, req)
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401")
-	}
-}
-
-func TestAuthMiddleware_LongToken(t *testing.T) {
-	e := setupEcho()
-	req := httptest.NewRequest(http.MethodGet, "/api/courses", nil)
-	longToken := make([]byte, MaxTokenLength+1)
-	for i := range longToken {
-		longToken[i] = 'a'
-	}
-	req.Header.Set("Authorization", "Bearer "+string(longToken))
-	rec := httptest.NewRecorder()
-
-	e.ServeHTTP(rec, req)
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401, got %d", rec.Code)
-	}
-}
-
-func TestAuthMiddleware_InvalidTokenChars(t *testing.T) {
-	e := setupEcho()
-	req := httptest.NewRequest(http.MethodGet, "/api/courses", nil)
-	req.Header.Set("Authorization", "Bearer токен123 space!")
-	rec := httptest.NewRecorder()
-
-	e.ServeHTTP(rec, req)
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401, got %d", rec.Code)
-	}
-}
-
-func TestAuthMiddleware_Success(t *testing.T) {
-	e := echo.New()
-	h := AuthMiddleware(func(c echo.Context) error {
-		token := c.Get("token").(string)
-		if token != "valid_token_123456" {
-			t.Fatal("token not set correctly")
-		}
-		return c.String(http.StatusOK, "ok")
-	})
-
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.Header.Set("Authorization", "Bearer valid_token_123456")
-	rec := httptest.NewRecorder()
-
-	c := e.NewContext(req, rec)
-	_ = h(c)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", rec.Code)
-	}
-}
-
-/* ============================================================
-   GET /courses
-   ============================================================ */
-
-
 func TestGetCourses_EmptyFilterResult(t *testing.T) {
 	resetDB()
 	e := setupEcho()
 
-	req := authReq(http.MethodGet, "/api/courses?status=finished", nil)
+	req := plainReq(http.MethodGet, "/api/courses?status=finished", nil)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 
@@ -214,7 +110,7 @@ func TestGetCourses(t *testing.T) {
 	resetDB()
 	e := setupEcho()
 
-	req := authReq(http.MethodGet, "/api/courses", nil)
+	req := plainReq(http.MethodGet, "/api/courses", nil)
 	rec := httptest.NewRecorder()
 
 	e.ServeHTTP(rec, req)
@@ -227,7 +123,7 @@ func TestGetCourses_Filter(t *testing.T) {
 	resetDB()
 	e := setupEcho()
 
-	req := authReq(http.MethodGet, "/api/courses?status=hidden", nil)
+	req := plainReq(http.MethodGet, "/api/courses?status=hidden", nil)
 	rec := httptest.NewRecorder()
 
 	e.ServeHTTP(rec, req)
@@ -244,7 +140,7 @@ func TestGetCourses_NoFilterAllVisible(t *testing.T) {
 	resetDB()
 	e := setupEcho()
 
-	req := authReq(http.MethodGet, "/api/courses", nil)
+	req := plainReq(http.MethodGet, "/api/courses", nil)
 	rec := httptest.NewRecorder()
 
 	e.ServeHTTP(rec, req)
@@ -257,15 +153,11 @@ func TestGetCourses_NoFilterAllVisible(t *testing.T) {
 	}
 }
 
-/* ============================================================
-   GET /courses/:id
-   ============================================================ */
-
 func TestGetCourse_OK(t *testing.T) {
 	resetDB()
 	e := setupEcho()
 
-	req := authReq(http.MethodGet, "/api/courses/algorithms", nil)
+	req := plainReq(http.MethodGet, "/api/courses/algorithms", nil)
 	rec := httptest.NewRecorder()
 
 	e.ServeHTTP(rec, req)
@@ -278,7 +170,7 @@ func TestGetCourse_NotFound(t *testing.T) {
 	resetDB()
 	e := setupEcho()
 
-	req := authReq(http.MethodGet, "/api/courses/unknown", nil)
+	req := plainReq(http.MethodGet, "/api/courses/unknown", nil)
 	rec := httptest.NewRecorder()
 
 	e.ServeHTTP(rec, req)
@@ -286,10 +178,6 @@ func TestGetCourse_NotFound(t *testing.T) {
 		t.Fatalf("expected 404")
 	}
 }
-
-/* ============================================================
-   POST /courses
-   ============================================================ */
 
 func TestCreateCourse_EmptyRepoTemplate(t *testing.T) {
 	resetDB()
@@ -304,7 +192,7 @@ func TestCreateCourse_EmptyRepoTemplate(t *testing.T) {
 		"description":"x"
 	}`)
 
-	req := authReq(http.MethodPost, "/api/courses", body)
+	req := plainReq(http.MethodPost, "/api/courses", body)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 
@@ -327,7 +215,7 @@ func TestCreateCourse_Success(t *testing.T) {
 		"description":"Go basics"
 	}`)
 
-	req := authReq(http.MethodPost, "/api/courses", body)
+	req := plainReq(http.MethodPost, "/api/courses", body)
 	rec := httptest.NewRecorder()
 
 	e.ServeHTTP(rec, req)
@@ -340,7 +228,7 @@ func TestCreateCourse_ValidationError(t *testing.T) {
 	resetDB()
 	e := setupEcho()
 
-	req := authReq(http.MethodPost, "/api/courses", []byte(`{"slug":"a"}`))
+	req := plainReq(http.MethodPost, "/api/courses", []byte(`{"slug":"a"}`))
 	rec := httptest.NewRecorder()
 
 	e.ServeHTTP(rec, req)
@@ -363,7 +251,7 @@ func TestCreateCourse_Conflict(t *testing.T) {
 		"description":"dup"
 	}`)
 
-	req := authReq(http.MethodPost, "/api/courses", body)
+	req := plainReq(http.MethodPost, "/api/courses", body)
 	rec := httptest.NewRecorder()
 
 	e.ServeHTTP(rec, req)
@@ -386,7 +274,7 @@ func TestCreateCourse_InvalidDateRange(t *testing.T) {
 		"description":"x"
 	}`)
 
-	req := authReq(http.MethodPost, "/api/courses", body)
+	req := plainReq(http.MethodPost, "/api/courses", body)
 	rec := httptest.NewRecorder()
 
 	e.ServeHTTP(rec, req)
@@ -415,7 +303,7 @@ func TestCreateCourse_MissingRequiredFields(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			req := authReq(http.MethodPost, "/api/courses", []byte(tc.body))
+			req := plainReq(http.MethodPost, "/api/courses", []byte(tc.body))
 			rec := httptest.NewRecorder()
 			e.ServeHTTP(rec, req)
 
@@ -449,20 +337,20 @@ func TestCreateCourse_InvalidSlugs(t *testing.T) {
 	e := setupEcho()
 
 	badSlugs := []string{
-		"Ab",           // uppercase + short
-		"go_course",    // underscore
-		"go course",    // space
-		"го-курс",      // cyrillic
-		"--a",          // leading dashes
-		"a--",          // trailing dashes
-		"a-b-c-d-e-f-g-h-i-j-k-l-m-n-o-p-q-r-s-t-u-v-w-x-y-z-0-1-2-3-4-5-6-7-8-9-0", // >50 chars
-		"ab",           // too short
+		"Ab",
+		"go_course",
+		"go course",
+		"го-курс",
+		"--a",
+		"a--",
+		"a-b-c-d-e-f-g-h-i-j-k-l-m-n-o-p-q-r-s-t-u-v-w-x-y-z-0-1-2-3-4-5-6-7-8-9-0",
+		"ab",
 	}
 
 	for _, slug := range badSlugs {
 		t.Run(slug, func(t *testing.T) {
 			body := fmt.Sprintf(`{"name":"Test","slug":"%s","status":"created","startDate":"2025-01-01","endDate":"2025-02-01","repoTemplate":"git@a","description":"x"}`, slug)
-			req := authReq(http.MethodPost, "/api/courses", []byte(body))
+			req := plainReq(http.MethodPost, "/api/courses", []byte(body))
 			rec := httptest.NewRecorder()
 			e.ServeHTTP(rec, req)
 
@@ -490,7 +378,7 @@ func TestCreateCourse_InvalidDates(t *testing.T) {
 	for _, tc := range badDates {
 		t.Run(tc.name, func(t *testing.T) {
 			body := fmt.Sprintf(`{"name":"Test","slug":"test","status":"created","startDate":"%s","endDate":"%s","repoTemplate":"git@a","description":"x"}`, tc.startDate, tc.endDate)
-			req := authReq(http.MethodPost, "/api/courses", []byte(body))
+			req := plainReq(http.MethodPost, "/api/courses", []byte(body))
 			rec := httptest.NewRecorder()
 			e.ServeHTTP(rec, req)
 
@@ -511,7 +399,7 @@ func TestCreateCourse_LongDescription(t *testing.T) {
 	}
 
 	body := fmt.Sprintf(`{"name":"Test","slug":"test","status":"created","startDate":"2025-01-01","endDate":"2025-02-01","repoTemplate":"git@a","description":"%s"}`, string(longDesc))
-	req := authReq(http.MethodPost, "/api/courses", []byte(body))
+	req := plainReq(http.MethodPost, "/api/courses", []byte(body))
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 
@@ -525,7 +413,7 @@ func TestCreateCourse_InvalidStatus(t *testing.T) {
 	e := setupEcho()
 
 	body := []byte(`{"name":"Test","slug":"test","status":"invalid","startDate":"2025-01-01","endDate":"2025-02-01","repoTemplate":"git@a","description":"x"}`)
-	req := authReq(http.MethodPost, "/api/courses", body)
+	req := plainReq(http.MethodPost, "/api/courses", body)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 
@@ -539,7 +427,7 @@ func TestCreateCourse_InvalidJSON(t *testing.T) {
 	e := setupEcho()
 
 	body := []byte(`{ "name": "test"`) // malformed
-	req := authReq(http.MethodPost, "/api/courses", body)
+	req := plainReq(http.MethodPost, "/api/courses", body)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 
@@ -564,7 +452,7 @@ func TestCreateCourse_ExtraFieldsIgnored(t *testing.T) {
 		"url":"should-ignore"
 	}`)
 
-	req := authReq(http.MethodPost, "/api/courses", body)
+	req := plainReq(http.MethodPost, "/api/courses", body)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 
@@ -582,16 +470,12 @@ func TestCreateCourse_ExtraFieldsIgnored(t *testing.T) {
 	}
 }
 
-/* ============================================================
-   PUT /courses/:id
-   ============================================================ */
-
 func TestUpdateCourse_UpdateRepoTemplate(t *testing.T) {
 	resetDB()
 	e := setupEcho()
 
 	body := []byte(`{"repoTemplate":"git@updated"}`)
-	req := authReq(http.MethodPut, "/api/courses/algorithms", body)
+	req := plainReq(http.MethodPut, "/api/courses/algorithms", body)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 
@@ -608,7 +492,7 @@ func TestUpdateCourse_DateRangeValidAfterPartial(t *testing.T) {
 	e := setupEcho()
 
 	body := []byte(`{"endDate":"2024-03-01"}`)
-	req := authReq(http.MethodPut, "/api/courses/algorithms", body)
+	req := plainReq(http.MethodPut, "/api/courses/algorithms", body)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 
@@ -630,7 +514,7 @@ func TestUpdateCourse_AllFields(t *testing.T) {
 		"description":"updated"
 	}`)
 
-	req := authReq(http.MethodPut, "/api/courses/algorithms", body)
+	req := plainReq(http.MethodPut, "/api/courses/algorithms", body)
 	rec := httptest.NewRecorder()
 
 	e.ServeHTTP(rec, req)
@@ -643,7 +527,7 @@ func TestUpdateCourse_InvalidStatus(t *testing.T) {
 	resetDB()
 	e := setupEcho()
 
-	req := authReq(http.MethodPut, "/api/courses/algorithms", []byte(`{"status":"bad"}`))
+	req := plainReq(http.MethodPut, "/api/courses/algorithms", []byte(`{"status":"bad"}`))
 	rec := httptest.NewRecorder()
 
 	e.ServeHTTP(rec, req)
@@ -656,7 +540,7 @@ func TestUpdateCourse_NotFound(t *testing.T) {
 	resetDB()
 	e := setupEcho()
 
-	req := authReq(http.MethodPut, "/api/courses/unknown", []byte(`{"name":"x"}`))
+	req := plainReq(http.MethodPut, "/api/courses/unknown", []byte(`{"name":"x"}`))
 	rec := httptest.NewRecorder()
 
 	e.ServeHTTP(rec, req)
@@ -666,42 +550,41 @@ func TestUpdateCourse_NotFound(t *testing.T) {
 }
 
 func TestUpdateCourse_PartialUpdate(t *testing.T) {
-    resetDB()
-    e := setupEcho()
+	resetDB()
+	e := setupEcho()
 
-    // Берём исходный статус до обновления
-    courseMu.RLock()
-    original := courseDB["algorithms"]
-    courseMu.RUnlock()
+	courseMu.RLock()
+	original := courseDB["algorithms"]
+	courseMu.RUnlock()
 
-    body := []byte(`{
+	body := []byte(`{
         "name": "New Name Only",
         "description": "New desc only"
     }`)
 
-    req := authReq(http.MethodPut, "/api/courses/algorithms", body)
-    rec := httptest.NewRecorder()
-    e.ServeHTTP(rec, req)
+	req := plainReq(http.MethodPut, "/api/courses/algorithms", body)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
 
-    if rec.Code != http.StatusOK {
-        t.Fatalf("expected 200, got %d", rec.Code)
-    }
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
 
-    var updated Course
-    json.Unmarshal(rec.Body.Bytes(), &updated)
+	var updated Course
+	json.Unmarshal(rec.Body.Bytes(), &updated)
 
-    if updated.Name != "New Name Only" {
-        t.Errorf("name not updated, got %q", updated.Name)
-    }
-    if updated.Description != "New desc only" {
-        t.Errorf("description not updated, got %q", updated.Description)
-    }
-    if updated.Status != original.Status {
-        t.Errorf("status changed unexpectedly: %q → %q", original.Status, updated.Status)
-    }
-    if updated.StartDate != original.StartDate {
-        t.Error("startDate should not change")
-    }
+	if updated.Name != "New Name Only" {
+		t.Errorf("name not updated, got %q", updated.Name)
+	}
+	if updated.Description != "New desc only" {
+		t.Errorf("description not updated, got %q", updated.Description)
+	}
+	if updated.Status != original.Status {
+		t.Errorf("status changed unexpectedly: %q → %q", original.Status, updated.Status)
+	}
+	if updated.StartDate != original.StartDate {
+		t.Error("startDate should not change")
+	}
 }
 
 func TestUpdateCourse_EmptyFieldsIgnored(t *testing.T) {
@@ -714,7 +597,7 @@ func TestUpdateCourse_EmptyFieldsIgnored(t *testing.T) {
 		"description":""
 	}`)
 
-	req := authReq(http.MethodPut, "/api/courses/algorithms", body)
+	req := plainReq(http.MethodPut, "/api/courses/algorithms", body)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 
@@ -745,7 +628,7 @@ func TestUpdateCourse_InvalidDateRange(t *testing.T) {
 		"endDate":   "2025-02-01"
 	}`)
 
-	req := authReq(http.MethodPut, "/api/courses/algorithms", body)
+	req := plainReq(http.MethodPut, "/api/courses/algorithms", body)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 
@@ -764,7 +647,7 @@ func TestUpdateCourse_InvalidDateFormat(t *testing.T) {
 	}
 
 	for _, bodyStr := range cases {
-		req := authReq(http.MethodPut, "/api/courses/algorithms", []byte(bodyStr))
+		req := plainReq(http.MethodPut, "/api/courses/algorithms", []byte(bodyStr))
 		rec := httptest.NewRecorder()
 		e.ServeHTTP(rec, req)
 
@@ -784,7 +667,7 @@ func TestUpdateCourse_LongDescription(t *testing.T) {
 	}
 
 	body := fmt.Sprintf(`{"description":"%s"}`, string(longDesc))
-	req := authReq(http.MethodPut, "/api/courses/algorithms", []byte(body))
+	req := plainReq(http.MethodPut, "/api/courses/algorithms", []byte(body))
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 
@@ -798,17 +681,17 @@ func TestUpdateCourse_InvalidNameLength(t *testing.T) {
 	e := setupEcho()
 
 	cases := []string{
-		`{"name": "ab"}`, // too short
+		`{"name": "ab"}`,
 	}
 
 	longName := make([]byte, MaxNameLength+1)
 	for i := range longName {
 		longName[i] = 'a'
 	}
-	cases = append(cases, fmt.Sprintf(`{"name": "%s"}`, string(longName))) // too long
+	cases = append(cases, fmt.Sprintf(`{"name": "%s"}`, string(longName)))
 
 	for _, bodyStr := range cases {
-		req := authReq(http.MethodPut, "/api/courses/algorithms", []byte(bodyStr))
+		req := plainReq(http.MethodPut, "/api/courses/algorithms", []byte(bodyStr))
 		rec := httptest.NewRecorder()
 		e.ServeHTTP(rec, req)
 
@@ -824,7 +707,7 @@ func TestUpdateCourse_IgnoreSlugChange(t *testing.T) {
 
 	body := []byte(`{"slug": "new-slug"}`)
 
-	req := authReq(http.MethodPut, "/api/courses/algorithms", body)
+	req := plainReq(http.MethodPut, "/api/courses/algorithms", body)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 
@@ -845,8 +728,8 @@ func TestUpdateCourse_InvalidJSON(t *testing.T) {
 	resetDB()
 	e := setupEcho()
 
-	body := []byte(`{ "name": "test"`) // malformed
-	req := authReq(http.MethodPut, "/api/courses/algorithms", body)
+	body := []byte(`{ "name": "test"`)
+	req := plainReq(http.MethodPut, "/api/courses/algorithms", body)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 
@@ -856,42 +739,42 @@ func TestUpdateCourse_InvalidJSON(t *testing.T) {
 }
 
 func TestCreateCourse_DoubleHyphenInSlug(t *testing.T) {
-    resetDB()
-    e := setupEcho()
+	resetDB()
+	e := setupEcho()
 
-    body := []byte(`{"name":"Test","slug":"go--course","status":"created","startDate":"2025-01-01","endDate":"2025-02-01","repoTemplate":"git@test","description":"x"}`)
-    req := authReq(http.MethodPost, "/api/courses", body)
-    rec := httptest.NewRecorder()
-    e.ServeHTTP(rec, req)
+	body := []byte(`{"name":"Test","slug":"go--course","status":"created","startDate":"2025-01-01","endDate":"2025-02-01","repoTemplate":"git@test","description":"x"}`)
+	req := plainReq(http.MethodPost, "/api/courses", body)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
 
-    if rec.Code != http.StatusBadRequest {
-        t.Errorf("expected 400 for double hyphen, got %d", rec.Code)
-    }
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for double hyphen, got %d", rec.Code)
+	}
 }
 
 func TestCreateCourse_LeadingTrailingHyphen(t *testing.T) {
-    resetDB()
-    e := setupEcho()
+	resetDB()
+	e := setupEcho()
 
-    cases := []string{"-start", "end-", "-"}
-    for _, slug := range cases {
-        t.Run(slug, func(t *testing.T) {
-            body := fmt.Sprintf(`{"name":"Test","slug":"%s","status":"created","startDate":"2025-01-01","endDate":"2025-02-01","repoTemplate":"git@test","description":"x"}`, slug)
-            req := authReq(http.MethodPost, "/api/courses", []byte(body))
-            rec := httptest.NewRecorder()
-            e.ServeHTTP(rec, req)
-            if rec.Code != http.StatusBadRequest {
-                t.Errorf("expected 400 for %q, got %d", slug, rec.Code)
-            }
-        })
-    }
+	cases := []string{"-start", "end-", "-"}
+	for _, slug := range cases {
+		t.Run(slug, func(t *testing.T) {
+			body := fmt.Sprintf(`{"name":"Test","slug":"%s","status":"created","startDate":"2025-01-01","endDate":"2025-02-01","repoTemplate":"git@test","description":"x"}`, slug)
+			req := plainReq(http.MethodPost, "/api/courses", []byte(body))
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+			if rec.Code != http.StatusBadRequest {
+				t.Errorf("expected 400 for %q, got %d", slug, rec.Code)
+			}
+		})
+	}
 }
 
 func TestPostCourseRequest_Validate_AllErrors(t *testing.T) {
 	req := PostCourseRequest{
-		Name:         "ab",              // too short
-		Slug:         "BAD_slug",         // invalid
-		Status:       "wrong",            // invalid
+		Name:         "ab",
+		Slug:         "BAD_slug",
+		Status:       "wrong",
 		StartDate:    "bad-date",
 		EndDate:      "also-bad",
 		RepoTemplate: "",

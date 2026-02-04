@@ -13,7 +13,9 @@ import (
 
 func RegisterHandlers(e *echo.Echo, apiServer *server.Server) {
 	e.GET("/api/courses", handler.GetCoursesHandler)
-	e.GET("/api/courses/:courseId", handler.GetCourseIdHandler)
-	e.POST("/api/courses", handler.PostCourseHandler)
-	e.PUT("/api/courses/:courseId", handler.PutCourseHandler)
+	e.GET("/api/coursses/:courseId", handler.GetCourseHandler)
+	e.POST("/api/courses", handler.CreateCourseHandler)
+	e.PUT("/api/courses/:courseId", handler.UpdateCourseHandler)
+
+	e.GET("/api/courses/:courseId/board", handler.GetCourseBoardHandler)
 }
